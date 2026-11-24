@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Snowfall Overlay</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0e1824; color: #eef4fd; font: 16px system-ui; }
+  main { min-height: 100svh; padding: clamp(2rem, 8vw, 8rem); display: grid; align-content: center; gap: 2rem;
+    background: radial-gradient(ellipse at 75% 5%, #395673, transparent 60%), #0e1824; }
+  h1 { font: 400 clamp(3rem, 9vw, 8rem)/.95 Georgia; margin: 0; }
+  p { max-width: 45ch; line-height: 1.6; }
+  .surfaces { display: flex; gap: 1.5rem; align-items: start; margin-top: 2rem; }
+  .ledge { width: min(30vw, 18rem); height: 1rem; border-radius: 2px; background: #4d6985; }
+  .ledge + .ledge { margin-top: 3rem; }
+  .controls { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  label { display: flex; gap: .5rem; align-items: center; }
+  button { font: inherit; color: inherit; padding: .55rem .85rem; border: 1px solid #69839d; border-radius: .35rem; background: #23394e; cursor: pointer; }
+</style>
+<main>
+  <h1>Snowfall<br>Overlay</h1>
+  <p>Let snow gather on the ledges, then sweep your pointer through it.</p>
+  <div class="surfaces" aria-hidden="true">
+    <div class="ledge" data-snowfall-surface></div>
+    <div class="ledge" data-snowfall-surface></div>
+  </div>
+  <div class="controls">
+    <label>Intensity <input type="range" min="0" max="100" value="80"></label>
+    <button type="button" id="clear">Clear snow</button>
+    <button type="button" id="pause">Pause</button>
+  </div>
+</main>
+<script src="../browser.js"></script>
+<script>
+  const snow = SnowfallOverlay.createSnowfall({ target: document.querySelector('main'), intensity: .8 });
+  const intensity = document.querySelector('input');
+  intensity.addEventListener('input', () => snow.setIntensity(intensity.valueAsNumber / 100));
+  document.querySelector('#clear').addEventListener('click', snow.clear);
+  const pause = document.querySelector('#pause');
+  let paused = false;
+  pause.addEventListener('click', () => {
+    paused = !paused;
+    if (paused) snow.stop();
+    else snow.start();
+    pause.textContent = paused ? 'Resume' : 'Pause';
+  });
+</script>
+</html>

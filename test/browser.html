@@ -1,0 +1,255 @@
+<!doctype html>
+<html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; }
+  main { width: 400px; height: 280px; position: relative; }
+  button { position: absolute; top: 100px; left: 50px; width: 240px; height: 35px; }
+</style>
+<main><button data-snowfall-surface>Surface</button></main>
+<output>RUNNING</output>
+<script src="../browser.js"></script>
+<script>
+  const output = document.querySelector('output');
+  try {
+    const assert = (condition, description) => {
+      if (!condition) throw new Error(description);
+    };
+    let time = 1;
+    let next = 1;
+    const queue = new Map();
+    window.requestAnimationFrame = callback => {
+      queue.set(next, callback);
+      return next++;
+    };
+    window.cancelAnimationFrame = id => queue.delete(id);
+    const step = count => {
+      for (let i = 0; i < count; i++) {
+        time += 16;
+        const callbacks = [...queue.values()];
+        queue.clear();
+        callbacks.forEach(callback => callback(time));
+      }
+    };
+    let seed = 37;
+    Math.random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+    const main = document.querySelector('main');
+    const options = { target: main, intensity: 1, melt: false, ground: false, storageKey: 'snowfall-browser-test' };
+    localStorage.removeItem(options.storageKey);
+    const snow = SnowfallOverlay.createSnowfall(options);
+    const canvas = document.querySelector('canvas');
+    const context = canvas.getContext('2d');
+    const opacity = (x, y) => context.getImageData(x * devicePixelRatio, y * devicePixelRatio, 1, 1).data[3];
+    step(700);
+    assert(canvas.clientWidth === 400 && canvas.clientHeight === 280, 'target canvas bounds');
+    assert(document.elementFromPoint(100, 110).matches('button'), 'clicks pass through');
+    assert(opacity(150, 98) === 255, 'snow accumulates on the marked surface');
+    for (let i = 0; i < 12; i++) {
+      const y = 93;
+      const from = i % 2 ? 180 : 120;
+      const to = i % 2 ? 120 : 180;
+      document.dispatchEvent(new PointerEvent('pointermove', { clientX: from, clientY: y, pointerType: 'mouse' }));
+      document.dispatchEvent(new PointerEvent('pointermove', { clientX: to, clientY: y, pointerType: 'mouse' }));
+      step(1);
+    }
+    assert(opacity(150, 98) < 255, 'pointer scatters accumulated snow');
+    snow.stop();
+    assert(queue.size === 0, 'stop cancels the animation');
+    snow.clear();
+    assert(opacity(150, 98) === 0, 'clear removes accumulated snow');
+    snow.start();
+    assert(queue.size === 1, 'start schedules an animation');
+    const settings = document.querySelector('[data-snowfall-settings]').shadowRoot;
+    settings.querySelector('summary').click();
+    assert(settings.querySelector('details').open, 'settings button opens panel');
+    const opacityInput = settings.querySelector('[name=opacity]');
+    opacityInput.value = '42';
+    opacityInput.dispatchEvent(new Event('input'));
+    assert(canvas.style.opacity === '0.42', 'opacity updates live');
+    const accumulationInput = settings.querySelector('[name=accumulation]');
+    accumulationInput.value = '0';
+    accumulationInput.dispatchEvent(new Event('input'));
+    step(1);
+    assert(opacity(210, 98) < 255, 'zero accumulation removes the drift');
+    accumulationInput.value = '200';
+    accumulationInput.dispatchEvent(new Event('input'));
+    settings.querySelector('[name=enabled]').click();
+    assert(canvas.hidden && queue.size === 0, 'visitor can turn off snowfall');
+    snow.destroy();
+    assert(!canvas.isConnected && queue.size === 0, 'destroy removes canvas and animation');
+    assert(!document.querySelector('[data-snowfall-settings]'), 'destroy removes settings');
+    const restored = SnowfallOverlay.createSnowfall(options);
+    const restoredCanvas = document.querySelector('canvas');
+    assert(restoredCanvas.hidden && restoredCanvas.style.opacity === '0.42', 'preferences restore');
+    assert(document.querySelector('[data-snowfall-settings]').shadowRoot
+      .querySelector('[name=accumulation]').value === '200', 'double accumulation restores');
+    document.querySelector('[data-snowfall-settings]').shadowRoot.querySelector('[name=enabled]').click();
+    assert(!restoredCanvas.hidden && queue.size === 1, 'visitor can turn on snowfall');
+    restored.destroy();
+    localStorage.removeItem(options.storageKey);
+    const withoutPanel = SnowfallOverlay.createSnowfall({ ...options, settings: false });
+    assert(!document.querySelector('[data-snowfall-settings]'), 'panel can be disabled');
+    withoutPanel.destroy();
+    function flakePosition(withPointer) {
+      seed = 37;
+      time = 1;
+      const effect = SnowfallOverlay.createSnowfall({ ...options, settings: false, accumulate: false });
+      const ctx = document.querySelector('canvas').getContext('2d');
+      const points = [];
+      const arc = ctx.arc.bind(ctx);
+      ctx.arc = (x, y, ...args) => {
+        points.push({ x, y });
+        arc(x, y, ...args);
+      };
+      step(40);
+      const { x, y } = points.at(-1);
+      if (withPointer) {
+        document.dispatchEvent(new PointerEvent('pointermove', {
+          clientX: x - 6, clientY: y, pointerType: 'mouse',
+        }));
+      }
+      points.length = 0;
+      step(1);
+      effect.destroy();
+      return points;
+    }
+    const calm = flakePosition(false);
+    const deflected = flakePosition(true);
+    assert(calm.some((point, i) => deflected[i].x - point.x > 2), 'cursor deflects falling flakes');
+
+    const rail = document.createElement('nav');
+    rail.id = 'santa-rail';
+    rail.style.cssText = 'position:absolute;left:20px;top:55px;width:360px;height:80px';
+    for (const left of [35, 240]) {
+      const button = document.createElement('button');
+      button.style.cssText = 'top:26px;width:75px;left:' + left + 'px';
+      rail.append(button);
+    }
+    main.append(rail);
+    const pageButton = document.createElement('button');
+    pageButton.className = 'santa-destination';
+    pageButton.style.cssText = 'top:150px;width:75px;left:240px';
+    const pageCard = document.createElement('article');
+    pageCard.className = 'santa-destination';
+    pageCard.style.cssText = 'position:absolute;top:215px;width:100px;height:45px;left:45px';
+    const footer = document.createElement('footer');
+    footer.style.cssText = 'position:absolute;bottom:-90px;width:100%;height:40px';
+    const footerButton = document.createElement('button');
+    footerButton.className = 'santa-destination';
+    footerButton.style.cssText = 'top:10px;left:100px;width:60px';
+    footer.append(footerButton);
+    const ledge = document.createElement('div');
+    ledge.setAttribute('data-snowfall-surface', '');
+    ledge.style.cssText = 'position:absolute;top:183px;left:15px;width:110px;height:10px';
+    main.append(pageButton, pageCard, ledge, footer);
+    const crewKey = 'snowfall-crew-browser-test';
+    localStorage.removeItem(crewKey);
+    const santaEffect = SnowfallOverlay.createSnowfall({
+      ...options, accumulation: 2, storageKey: crewKey, ground: true,
+      santa: { surface: '#santa-rail', destinations: '.santa-destination', interval: 1,
+        crew: { footer: 'footer' } },
+    });
+    const santaContext = document.querySelector('canvas').getContext('2d');
+    const santaSettings = document.querySelector('[data-snowfall-settings]').shadowRoot;
+    const santaToggle = santaSettings.querySelector('[name=santaEnabled]');
+    const speed = santaSettings.querySelector('[name=santaSpeed]');
+    assert(speed.value === '40' && speed.min === '20' && speed.max === '100', 'Santa defaults to slower motion');
+    const poses = [];
+    const tractorXs = [];
+    const ropeYs = [];
+    const ropeXs = new Set();
+    let currentX;
+    let pendingRope = false;
+    const translate = santaContext.translate.bind(santaContext);
+    santaContext.translate = (x, y) => {
+      poses.push({ x, y });
+      currentX = x;
+      if (pendingRope) {
+        ropeYs.push(y);
+        ropeXs.add(x);
+      }
+      pendingRope = false;
+      translate(x, y);
+    };
+    let ropeFrames = 0;
+    let waves = 0;
+    let tractorFrames = 0;
+    const stroke = santaContext.stroke.bind(santaContext);
+    santaContext.stroke = () => {
+      if (santaContext.strokeStyle === '#d6b189') {
+        ropeFrames++;
+        pendingRope = true;
+      }
+      if (santaContext.strokeStyle === '#943a43') waves++;
+      stroke();
+    };
+    const fillRect = santaContext.fillRect.bind(santaContext);
+    santaContext.fillRect = (...args) => {
+      if (santaContext.fillStyle === '#236b6a') {
+        tractorFrames++;
+        tractorXs.push(currentX);
+      }
+      fillRect(...args);
+    };
+    step(510);
+    assert(footer.getBoundingClientRect().top > 280 && tractorFrames > 0, 'tractor works with footer out of view');
+    footer.style.bottom = '0';
+    santaEffect.refresh();
+    step(2290);
+    assert(poses.filter(point => point.y >= 54 && point.y <= 56).length > 700,
+      'Santa slowly sweeps the rail');
+    const across = (y, left, right) => poses.some(p => p.y === y && p.x === left)
+      && poses.some(p => p.y === y && p.x === right);
+    assert(across(150, 240, 315), 'Santa sweeps across the page button');
+    assert(across(215, 45, 145), 'Santa sweeps across the page card');
+    assert(!poses.some(point => point.y === 250 || point.y === 280), 'jumping Santa avoids footer and ground');
+    assert(ropeFrames > 100, 'rope Santa visibly descends');
+    assert(ropeXs.size === 1, 'rope Santa stays on one vertical line');
+    assert(ropeYs.filter(y => y === 183).length > 100 && ropeYs.some(y => y > 200),
+      'rope Santa pauses to clean and then resumes descending');
+    assert(tractorFrames > 100 && waves > 45, 'tractor Santa plows and stops to smile and wave');
+    assert(tractorXs.some(x => x > 400) && tractorXs.some(x => x < 0), 'tractor crosses the entire snowbank');
+    speed.value = '80';
+    speed.dispatchEvent(new Event('input'));
+    assert(JSON.parse(localStorage.getItem(crewKey)).santaSpeed === 0.8, 'Santa speed persists');
+    santaToggle.click();
+    const count = poses.length;
+    step(200);
+    assert(poses.length === count, 'Mini Santa can be turned off');
+    santaEffect.destroy();
+    localStorage.removeItem(crewKey);
+    const dryEffect = SnowfallOverlay.createSnowfall({
+      ...options, melt: false, storageKey: false,
+      santa: { surface: '#santa-rail', destinations: '.santa-destination', interval: 1,
+        speed: 1, crew: { footer: 'footer' } },
+    });
+    const dryContext = document.querySelector('canvas').getContext('2d');
+    const dryTranslate = dryContext.translate.bind(dryContext);
+    const dryStroke = dryContext.stroke.bind(dryContext);
+    const dryRopeYs = [];
+    let drewSanta = false;
+    let drewRope = false;
+    dryContext.stroke = () => {
+      if (dryContext.strokeStyle === '#d6b189') drewRope = true;
+      dryStroke();
+    };
+    dryContext.translate = (x, y) => {
+      drewSanta = true;
+      if (drewRope) dryRopeYs.push(y);
+      drewRope = false;
+      dryTranslate(x, y);
+    };
+    for (let i = 0; i < 700 && !drewSanta; i++) step(1);
+    assert(drewSanta, 'Santa starts when the navigation has snow');
+    dryEffect.setIntensity(0);
+    dryEffect.clear();
+    step(800);
+    assert(dryRopeYs.some(y => y > 200) && dryRopeYs.filter(y => y === 183).length < 6,
+      'rope Santa passes a bare ledge without stopping');
+    dryEffect.destroy();
+    output.textContent = 'PASS';
+  } catch (error) {
+    output.textContent = 'FAIL: ' + error.message;
+  }
+</script>
+</html>

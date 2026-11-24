@@ -1,0 +1,39 @@
+{
+  "name": "snowfall-overlay",
+  "version": "0.8.0",
+  "description": "Interactive Canvas snowfall with accumulation on HTML elements",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/artashesmikoyan-lgtm/snowfall-overlay.git"
+  },
+  "homepage": "https://github.com/artashesmikoyan-lgtm/snowfall-overlay#readme",
+  "bugs": {
+    "url": "https://github.com/artashesmikoyan-lgtm/snowfall-overlay/issues"
+  },
+  "keywords": ["snowfall", "canvas", "snow", "animation"],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    }
+  },
+  "types": "./index.d.ts",
+  "unpkg": "./browser.js",
+  "jsdelivr": "./browser.js",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "browser.js"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "prepack": "npm run build",
+    "test": "node --test"
+  }
+}
