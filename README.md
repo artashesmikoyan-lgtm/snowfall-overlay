@@ -5,7 +5,7 @@ Dependency-free Canvas 2D snowfall for websites. Snow accumulates on selected HT
 ## Install
 
 ```sh
-npm install snowfall-overlay
+npm install snowfall-overlay@0.9.0
 ```
 
 To install from a local checkout, run `npm pack` here and install the resulting archive in your website project.
@@ -14,30 +14,59 @@ To install from a local checkout, run `npm pack` here and install the resulting 
 import { createSnowfall } from 'snowfall-overlay';
 
 const snow = createSnowfall({
-  target: document.querySelector('#hero'),
   intensity: 0.7,
 });
-
-// Call when the component unmounts.
-snow.destroy();
 ```
 
 Mark the elements that should collect snow with `data-snowfall-surface`. Omit `target` to cover the viewport. Initialize after the document body exists, or in the client-side mount hook of your framework.
 
 Calling `createSnowfall()` also adds a **Snow settings** button. Visitors can toggle snowfall, adjust intensity and opacity, configure accumulation and pointer interaction, or clear snow. Settings are stored in the current browser for this site. Use `settings: false` to hide the panel and disable preference loading, or `storageKey: false` to keep the panel without saving choices. Set `enabled: false` to start off for visitors who have no saved choice.
 
+## Continuous Santa patrols in 0.9.0
+
+```js
+import { createSnowfall } from 'snowfall-overlay';
+
+const snow = createSnowfall({
+  santa: {
+    surface: '#site-nav',
+    patrols: {
+      buttons: 'main button',
+      cards: 'main .snow-card',
+    },
+    crew: { footer: 'footer' },
+    speed: 0.4,
+  },
+});
+```
+
+Use CSS selectors that match your site's markup. `surface` identifies the visible navigation bar. `patrols.buttons` and `patrols.cards` identify the page elements where the other two Santas land and sweep. The package adds these destinations as accumulation surfaces.
+
+- The navbar, buttons, and cards each get a dedicated Santa. They repeat their routes while their surfaces are visible.
+- `crew` adds the rope Santa and the tractor. In patrol mode they repeat too. The tractor clears the bottom edge at any scroll position when ground accumulation is enabled.
+- **Snow settings → Mini Santa** controls the characters. **Santa speed** changes their speed from 20% to 100%. A saved preference takes precedence over `santa.speed`. Enable **Collect on elements** for the navbar, button, card, and rope routes.
+
+If you pass just `santa.surface`, the original occasional visits apply. In that mode `santa.interval` sets the minimum time between visits, and `santa.destinations` can send the same Santa from the nav to visible page elements.
+
 ## Plain HTML
 
-Copy `browser.js` from the package into your site and load it after your markup.
+Load the browser build after your markup. You can also copy `browser.js` from the package and serve it from your own site.
 
 ```html
-<section id="hero">
-  <h1 data-snowfall-surface>Winter collection</h1>
-</section>
-<script src="./browser.js"></script>
+<nav id="site-nav"><a href="#work">Work</a></nav>
+<main id="work">
+  <button type="button">View projects</button>
+  <article class="snow-card"><h2>Winter collection</h2></article>
+</main>
+<footer>Portfolio</footer>
+<script src="https://cdn.jsdelivr.net/npm/snowfall-overlay@0.9.0/browser.js"></script>
 <script>
-  const snow = SnowfallOverlay.createSnowfall({
-    target: document.querySelector('#hero'),
+  SnowfallOverlay.createSnowfall({
+    santa: {
+      surface: '#site-nav',
+      patrols: { buttons: 'main button', cards: 'main .snow-card' },
+      crew: { footer: 'footer' },
+    },
   });
 </script>
 ```
@@ -60,13 +89,7 @@ Copy `browser.js` from the package into your site and load it after your markup.
 | `zIndex` | `10` | Stacking level of the overlay |
 | `settings` | `true` | Show the visitor settings button |
 | `storageKey` | `'snowfall-overlay:preferences'` | Use distinct keys for multiple panels on the same site, or pass `false` to disable saving |
-| `santa` | Off | Set `{ surface: '#site-nav' }` to let Mini Santa clear snow from the nav and hop between its links and buttons. Set `destinations: 'main button, .card'` to jump to visible elements elsewhere on the page. |
-
-Mini Santa waits until snow collects and is controlled by its own checkbox in the settings panel. The first visit can happen after 35 seconds by default, with later visits spaced out by a randomized delay. Override the minimum delay via `santa.interval` (seconds).
-
-Set `santa.crew: { footer: 'footer' }` to add a rope cleaner and a tractor. The rope cleaner descends vertically and stops only at snowy ledges along the same line. The tractor crosses the entire bottom snowbank at any scroll position and sometimes pauses to wave. The first Santa sweeps the navigation and its landings above the footer. Use the **Santa speed** slider to change all three animations from 20% to 100%. The default is 40% and can be changed through `santa.speed`. These animations follow reduced-motion and snowfall settings.
-
-Set `santa.patrols: { buttons: 'main button', cards: 'main article, .card' }` to give the navigation, page buttons and cards separate Santas. The cleaners repeat their routes while enabled. The rope cleaner and tractor also repeat when `crew` is configured.
+| `santa` | Off | Configure [continuous patrols](#continuous-santa-patrols-in-090) or occasional Santa visits |
 
 The effect starts automatically. Use `stop()` to freeze it, `start()` to resume, `clear()` to empty it, `setIntensity(value)` to adjust it, and `destroy()` to dispose of it. Call `refresh()` after geometry changes driven by CSS animation or an external layout that the observers do not see. The overlay uses rectangular bounds and horizontal ledges. It hides for reduced motion and pauses in background tabs.
 
