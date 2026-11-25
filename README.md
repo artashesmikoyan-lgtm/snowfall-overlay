@@ -66,6 +66,8 @@ Mini Santa waits until snow collects and is controlled by its own checkbox in th
 
 Set `santa.crew: { footer: 'footer' }` to add a rope cleaner and a tractor. The rope cleaner descends vertically and stops only at snowy ledges along the same line. The tractor crosses the entire bottom snowbank at any scroll position and sometimes pauses to wave. The first Santa sweeps the navigation and its landings above the footer. Use the **Santa speed** slider to change all three animations from 20% to 100%. The default is 40% and can be changed through `santa.speed`. These animations follow reduced-motion and snowfall settings.
 
+Set `santa.patrols: { buttons: 'main button', cards: 'main article, .card' }` to give the navigation, page buttons and cards separate Santas. The cleaners repeat their routes while enabled. The rope cleaner and tractor also repeat when `crew` is configured.
+
 The effect starts automatically. Use `stop()` to freeze it, `start()` to resume, `clear()` to empty it, `setIntensity(value)` to adjust it, and `destroy()` to dispose of it. Call `refresh()` after geometry changes driven by CSS animation or an external layout that the observers do not see. The overlay uses rectangular bounds and horizontal ledges. It hides for reduced motion and pauses in background tabs.
 
 Run `npm run build` and open `demo/index.html` for a standalone preview.

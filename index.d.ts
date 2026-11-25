@@ -27,6 +27,8 @@ export interface SnowfallOptions {
     stops?: string;
     /** Selector for visible jump destinations outside the navigation surface. */
     destinations?: string;
+    /** Give the nav, buttons and cards independent continuous cleaners. Crew routes also repeat. */
+    patrols?: { buttons: string; cards: string };
     /** Minimum time between cleanups in seconds. Defaults to 35. */
     interval?: number;
     /** Animation playback speed from 0.2 to 1. Defaults to 0.4. */

@@ -59,16 +59,26 @@ export function createSnowfall({
   const santaSurface = santa?.surface;
   const santaStops = santa?.stops ?? 'a, button, [role="button"]';
   const santaDestinations = santa?.destinations;
+  const patrols = santa?.patrols;
   const santaFooter = santa?.crew?.footer;
   const santaInterval = Number.isFinite(santa?.interval) ? Math.max(1, santa.interval) : 35;
   if (santaSurface) {
     scene.querySelector(santaSurface);
     scene.querySelector(santaDestinations ?? santaStops);
+    if (patrols) {
+      scene.querySelector(patrols.buttons);
+      scene.querySelector(patrols.cards);
+    }
     if (santaFooter) scene.querySelector(santaFooter);
   }
   let santaReadyIn = santaInterval;
   let santaRun;
   let santaPose;
+  const pagePatrols = [{}, {}];
+  let patrolTargets = [[], []];
+  let patrolPoses = [];
+  let navTime = 0;
+  let navColumn;
   let santaRoof;
   let ropePose;
   let ropeRun;
@@ -133,6 +143,12 @@ export function createSnowfall({
       elements.add(rail);
       const stops = santaDestinations ? scene.querySelectorAll(santaDestinations) : rail.querySelectorAll(santaStops);
       for (const stop of stops) elements.add(stop);
+    }
+    if (patrols) {
+      patrolTargets = [patrols.buttons, patrols.cards].map(selector => [...scene.querySelectorAll(selector)]);
+      for (const targets of patrolTargets) {
+        for (const element of targets) elements.add(element);
+      }
     }
     for (const element of observed) if (!elements.has(element)) resize.unobserve(element);
     for (const element of elements) if (!observed.has(element)) resize.observe(element);
@@ -269,11 +285,13 @@ export function createSnowfall({
 
   function advanceSanta(dt) {
     santaPose = undefined;
+    patrolPoses = [];
     ropePose = tractorPose = undefined;
     if (!santaSurface || !preferences.santaEnabled || accumulation === 0) {
       santaRun = undefined;
       ropeRun = undefined;
       tractorRun = undefined;
+      resetPatrols();
       return;
     }
     const groundBed = activeBeds.includes(beds.get(floor)) ? beds.get(floor) : undefined;
@@ -282,6 +300,11 @@ export function createSnowfall({
     if (!accumulate) {
       santaRun = undefined;
       ropeRun = undefined;
+      resetPatrols();
+      return;
+    }
+    if (patrols) {
+      advancePatrols(motionStep);
       return;
     }
     if (ropeRun) advanceRope(motionStep);
@@ -371,6 +394,82 @@ export function createSnowfall({
     };
   }
 
+  function resetPatrols() {
+    navTime = 0;
+    navColumn = undefined;
+    for (const patrol of pagePatrols) {
+      patrol.current = patrol.previous = undefined;
+      patrol.time = 0;
+      patrol.cleared = 0;
+    }
+  }
+
+  function advancePatrols(dt) {
+    const rail = scene.querySelector(santaSurface);
+    const bed = beds.get(rail);
+    const nav = activeBeds.includes(bed) ? bed : undefined;
+    for (const [index, patrol] of pagePatrols.entries()) {
+      const pose = advancePagePatrol(patrol, rail, dt, index);
+      if (pose) patrolPoses.push(pose);
+    }
+    if (santaFooter) {
+      if (!ropeRun) prepareRope({ stops: pagePatrols.map(patrol => patrol.current) }, nav ?? { y: 0 });
+      advanceRope(dt);
+    }
+    if (!nav) {
+      navTime = 0;
+      navColumn = undefined;
+      return;
+    }
+    const duration = clamp(nav.span / 82, 6, 16);
+    navTime = (navTime + dt) % (duration * 2);
+    const facing = navTime < duration ? 1 : -1;
+    const progress = 1 - Math.abs(navTime / duration - 1);
+    const column = Math.min(nav.depth.length - 1, Math.floor(progress * nav.depth.length));
+    const previous = navColumn ?? column;
+    shakeSnow(nav, Math.min(previous, column), Math.max(previous, column) + 1, facing);
+    navColumn = column;
+    santaPose = { x: clamp(nav.x + nav.span * progress, 12, width - 12),
+      y: Math.max(33, nav.y), facing, sweep: Math.sin(navTime * 7) * 6 };
+  }
+
+  function advancePagePatrol(patrol, rail, dt, index) {
+    const flight = 1.5;
+    const duration = 5.2;
+    let destination = sweepBounds(patrol.current);
+    if (!destination || patrol.time >= duration) {
+      const targets = patrolTargets[index]
+        .filter(element => !rail?.contains(element) && (index === 1 || !element.matches(patrols.cards)))
+        .filter(element => sweepBounds(element));
+      const currentIndex = targets.indexOf(patrol.current);
+      patrol.previous = destination ? patrol.current : undefined;
+      patrol.current = targets[(currentIndex + 1) % targets.length];
+      destination = sweepBounds(patrol.current);
+      if (!destination) return;
+      patrol.time = 0;
+      patrol.cleared = Math.max(0, Math.floor((destination.left - destination.bed.x) / destination.bed.step));
+    }
+    patrol.time += dt;
+    const previous = sweepBounds(patrol.previous);
+    const fromX = previous?.right ?? destination.left;
+    const fromY = previous?.y ?? destination.y;
+    const jump = Math.min(1, patrol.time / flight);
+    const eased = jump * jump * (3 - 2 * jump);
+    const sweep = clamp((patrol.time - flight) / (duration - flight), 0, 1);
+    const tint = index === 0 ? '#23756d' : '#5b4c9a';
+    if (jump < 1) {
+      const arc = clamp(Math.hypot(destination.left - fromX, destination.y - fromY) * 0.15, 20, 92);
+      return { x: fromX + (destination.left - fromX) * eased,
+        y: Math.max(32, fromY + (destination.y - fromY) * eased - Math.sin(jump * Math.PI) * arc),
+        facing: Math.sign(destination.left - fromX) || 1, tint };
+    }
+    const x = destination.left + (destination.right - destination.left) * sweep;
+    const end = Math.floor((x - destination.bed.x) / destination.bed.step) + 1;
+    shakeSnow(destination.bed, patrol.cleared, end);
+    patrol.cleared = end;
+    return { x, y: Math.max(32, destination.y), facing: 1, tint, sweep: Math.sin(patrol.time * 8) * 6 };
+  }
+
   function sweepBounds(element) {
     const bed = beds.get(element);
     if (!activeBeds.includes(bed) || bed.y >= footerEdge || footerElement?.contains(element)) return;
@@ -386,7 +485,7 @@ export function createSnowfall({
     const score = x => coverage(x).reduce((total, bed) => total + (candidates.includes(bed) ? 2 : 1), 0);
     const side = score(positions[1]) > score(positions[0]) ? 1 : 0;
     const anchor = positions[side];
-    ropeRun = { wait: 2.5, anchor, stops: coverage(anchor), index: 0, y: 32, cleaning: 0, cleared: 0 };
+    ropeRun = { wait: patrols ? 0 : 2.5, anchor, stops: coverage(anchor), index: 0, y: 32, cleaning: 0, cleared: 0 };
   }
 
   function advanceRope(dt) {
@@ -440,8 +539,8 @@ export function createSnowfall({
     }
     if (!tractorRun) {
       tractorWait -= dt;
-      if (tractorWait > 0) return;
-      if (!bed.depth.some(depth => depth >= 1.5)) {
+      if (!patrols && tractorWait > 0) return;
+      if (!patrols && !bed.depth.some(depth => depth >= 1.5)) {
         tractorWait = 3;
         return;
       }
@@ -533,6 +632,7 @@ export function createSnowfall({
     context.fill();
     context.globalAlpha = 1;
     if (santaPose) drawSanta(context, santaPose);
+    for (const pose of patrolPoses) drawSanta(context, pose);
     if (ropePose) drawRopeSanta(context, ropePose);
     if (tractorPose) drawTractorSanta(context, tractorPose);
   }
@@ -730,7 +830,7 @@ function updateSlider(input, value) {
   input.previousElementSibling.value = percent + '%';
 }
 
-function drawSanta(context, { x, y, facing, opacity = 1, tool = 'broom', wave = 0, sweep = 0 }) {
+function drawSanta(context, { x, y, facing, opacity = 1, tool = 'broom', wave = 0, sweep = 0, tint = '#ab2435' }) {
   context.save();
   context.translate(Math.round(x), Math.round(y));
   context.scale(facing, 1);
@@ -743,7 +843,7 @@ function drawSanta(context, { x, y, facing, opacity = 1, tool = 'broom', wave = 
   };
 
   oval('#562338', -8, -12, 5, 7);
-  oval('#ab2435', 0, -9, 8, 7);
+  oval(tint, 0, -9, 8, 7);
   oval('#251d2b', -4, -2, 4, 2);
   oval('#251d2b', 5, -2, 4, 2);
   context.fillStyle = '#302229';

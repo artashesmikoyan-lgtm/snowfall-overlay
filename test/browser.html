@@ -247,6 +247,29 @@
     assert(dryRopeYs.some(y => y > 200) && dryRopeYs.filter(y => y === 183).length < 6,
       'rope Santa passes a bare ledge without stopping');
     dryEffect.destroy();
+    const continuous = SnowfallOverlay.createSnowfall({
+      ...options, intensity: 0, ground: true, storageKey: false,
+      santa: { surface: '#santa-rail', speed: 1, crew: { footer: 'footer' },
+        patrols: { buttons: 'button.santa-destination', cards: 'article.santa-destination' } },
+    });
+    const loopContext = document.querySelector('canvas').getContext('2d');
+    const loopTranslate = loopContext.translate.bind(loopContext);
+    const loopEllipse = loopContext.ellipse.bind(loopContext);
+    const patrolTrace = { '#ab2435': [], '#23756d': [], '#5b4c9a': [] };
+    let pose;
+    loopContext.translate = (x, y) => { pose = { x, y }; loopTranslate(x, y); };
+    loopContext.ellipse = (...args) => {
+      patrolTrace[loopContext.fillStyle]?.push(pose);
+      loopEllipse(...args);
+    };
+    step(1600);
+    assert(patrolTrace['#23756d'].filter(p => p.y === 150 && p.x >= 310).length >= 2,
+      'button Santa repeatedly sweeps the page button');
+    assert(patrolTrace['#5b4c9a'].filter(p => p.y === 215 && p.x >= 140).length >= 2,
+      'card Santa repeatedly sweeps the page card');
+    assert(patrolTrace['#ab2435'].filter(p => p.y === 55 && p.x > 370).length >= 2,
+      'navigation Santa patrols without waiting for snow');
+    continuous.destroy();
     output.textContent = 'PASS';
   } catch (error) {
     output.textContent = 'FAIL: ' + error.message;

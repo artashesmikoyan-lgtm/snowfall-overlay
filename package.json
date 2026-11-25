@@ -1,6 +1,6 @@
 {
   "name": "snowfall-overlay",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Interactive Canvas snowfall with accumulation on HTML elements",
   "repository": {
     "type": "git",
@@ -10,7 +10,12 @@
   "bugs": {
     "url": "https://github.com/artashesmikoyan-lgtm/snowfall-overlay/issues"
   },
-  "keywords": ["snowfall", "canvas", "snow", "animation"],
+  "keywords": [
+    "snowfall",
+    "canvas",
+    "snow",
+    "animation"
+  ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
